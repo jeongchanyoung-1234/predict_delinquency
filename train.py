@@ -6,7 +6,7 @@ import torch.optim as optim
 
 from module.model import AutoEncoder
 from module.trainer import Trainer
-from module.data_loader import get_loaders
+from module.data_loader import get_loaders, get_data
 
 def define_argparser():
     p = argparse.ArgumentParser()
@@ -20,9 +20,10 @@ def define_argparser():
     p.add_argument('--n_epochs', type=int, default=20)
     p.add_argument('--verbose', type=int, default=2)
 
-    p.add_argument('--imp', type=bool, default=True)
+    p.add_argument('--imp', action='store_true')
 
     ## ae
+    p.add_argument('--input_size', type=int, default=44)
     p.add_argument('--step', type=int, default=2)
     p.add_argument('--btl_size', type=int, default=6)
 
@@ -32,13 +33,13 @@ def define_argparser():
 
 def main(config):
 
-    train_loader, val_loader, test_loader = get_loaders(config)
+    x, y, _ = get_data(config)
+    train_loader, val_loader, test_loader = get_loaders(config, x, y)
 
 
     if config.objective == 'ae':
-        input_size = 7
 
-        model = AutoEncoder(input_size, config.btl_size, config.step)
+        model = AutoEncoder(config.input_size, config.btl_size, config.step)
         loss = nn.MSELoss()
         optimizer = optim.Adam(model.parameters())
 

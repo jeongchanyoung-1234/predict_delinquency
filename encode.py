@@ -25,11 +25,11 @@ def main(config):
     model_dict = saved_data['model']
     train_config = saved_data['config']
 
-    model = AutoEncoder(7, train_config.btl_size, train_config.step)
+    model = AutoEncoder(train_config.input_size, train_config.btl_size, train_config.step)
     model.load_state_dict(model_dict)
 
-    _, _, _, whole_data = get_data(train_config, base='C:/Users/JCY/Dacon/shinhan/data')
-    result = model.encoder(torch.from_numpy(whole_data).float())
+    _, _, whole_data = get_data(train_config)
+    result = model.encoder(torch.from_numpy(whole_data.values).float())
     result = result.detach().numpy()
     print(result)
     pd.DataFrame(result).to_csv('data/encode_result.csv', index=False)
