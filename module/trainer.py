@@ -36,7 +36,7 @@ class KerasLikeEngine(Engine) :
 
 
         y_hat = engine.model(x)
-        loss_i = engine.loss(y_hat.squeeze(), y)
+        loss_i = engine.loss(y_hat.squeeze(), x)
 
         ### ---- train only---- ###
         engine.optimizer.zero_grad()
@@ -64,7 +64,7 @@ class KerasLikeEngine(Engine) :
 
 
             y_hat = engine.model(x)
-            loss_i = engine.loss(y_hat.squeeze(), y)
+            loss_i = engine.loss(y_hat.squeeze(), x)
 
             if isinstance(y, torch.LongTensor) or isinstance(y, torch.cuda.LongTensor) :
                 accuracy = (torch.argmax(y_hat, dim=-1) == y).sum() / float(y.size(0))
