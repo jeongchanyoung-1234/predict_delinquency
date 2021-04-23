@@ -10,7 +10,8 @@ from module.data_loader import get_data
 def define_argparse():
     p = argparse.ArgumentParser()
 
-    p.add_argument('--model_fn', required=True)
+    p.add_argument('--model_fn', type=str, required=True)
+    p.add_argument('--save_fn', type=str, required=True)
     p.add_argument('--gpu_id', type=int, default=0 if torch.cuda.is_available() else -1)
     config = p.parse_args()
 
@@ -28,11 +29,11 @@ def main(config):
     model = AutoEncoder(train_config.input_size, train_config.btl_size, train_config.step)
     model.load_state_dict(model_dict)
 
-    _, _, whole_data = get_data(train_config)
-    result = model.encoder(torch.from_numpy(whole_data.values).float())
+    _, X = get_data(train_config)
+    result = model.encoder(torch.from_numpy(X).float())
     result = result.detach().numpy()
-    print(result)
-    pd.DataFrame(result).to_csv('data/encode_result.csv', index=False)
+    print('Result : shape {}'.format(result.shape))
+    pd.DataFrame(result).to_csv('data/{}'.format(config.save_fn), index=False)
 
 
 if __name__ == '__main__':

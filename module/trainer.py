@@ -31,12 +31,13 @@ class KerasLikeEngine(Engine) :
     def train(engine, minibatch) :
         engine.model.train()
 
-        x, y = minibatch
-        x, y = x.to(engine.device), y.to(engine.device)
+        x = minibatch
+        x = x.to(engine.device)
+        x = x.float()
 
 
-        y_hat = engine.model(x)
-        loss_i = engine.loss(y_hat.squeeze(), x)
+        x_hat = engine.model(x)
+        loss_i = engine.loss(x_hat.squeeze(), x)
 
         ### ---- train only---- ###
         engine.optimizer.zero_grad()
@@ -44,87 +45,39 @@ class KerasLikeEngine(Engine) :
         engine.optimizer.step()
         ### ---- train only---- ###
 
-        if isinstance(y, torch.LongTensor) or isinstance(y, torch.cuda.LongTensor) :
-            accuracy = (torch.argmax(y_hat, dim=-1) == y).sum() / float(y.size(0))
-        else :
-            accuracy = 0
-
         return {
             'loss' : float(loss_i),
-            'accuracy' : float(accuracy),
         }
 
-    @staticmethod
-    def valid(engine, minibatch) :
-        engine.model.eval()
-
-        with torch.no_grad() :
-            x, y = minibatch
-            x, y = x.to(engine.device), y.to(engine.device)
-
-
-            y_hat = engine.model(x)
-            loss_i = engine.loss(y_hat.squeeze(), x)
-
-            if isinstance(y, torch.LongTensor) or isinstance(y, torch.cuda.LongTensor) :
-                accuracy = (torch.argmax(y_hat, dim=-1) == y).sum() / float(y.size(0))
-            else :
-                accuracy = 0
-
-            return {
-                'loss' : float(loss_i),
-                'accuracy' : float(accuracy),
-            }
 
     @staticmethod
-    def attach(train_engine, val_engine, verbose=EPOCHWISE) :
+    def attach(train_engine, verbose=EPOCHWISE) :
         def attach_running_average(engine, metric_name) :
             RunningAverage(output_transform=lambda x : x[metric_name]).attach(
                 engine,
                 metric_name,
             )
 
-        training_metric_names = ['loss', 'accuracy']
+        training_metric_names = ['loss']
 
         for metric_name in training_metric_names :
             attach_running_average(train_engine, metric_name)
 
         if verbose == BATCHWISE :
             pbar = ProgressBar(bar_format=None, ncols=120)
-            pbar.attach(train_engine, ['loss', 'accuracy'])
+            pbar.attach(train_engine, ['loss'])
 
         if verbose == EPOCHWISE :
             pbar = ProgressBar(bar_format=None, ncols=120)
-            pbar.attach(train_engine, ['loss', 'accuracy'])
+            pbar.attach(train_engine, ['loss'])
 
             @train_engine.on(Events.EPOCH_COMPLETED)
             def print_logs(engine) :
-                print('Epoch {} Train - Accuracy: {:.4f} Loss: {:.4f}'.format(
+                print('Epoch {} Train - Loss: {:.4f}'.format(
                     engine.state.epoch,
-                    engine.state.metrics['accuracy'],
                     engine.state.metrics['loss'],
                 ))
 
-        validation_metric_names = ['loss', 'accuracy']
-
-        for metric_name in validation_metric_names :
-            attach_running_average(val_engine, metric_name)
-
-        if verbose == BATCHWISE :
-            pbar = ProgressBar(bar_format=None, ncols=120)
-            pbar.attach(val_engine, ['loss', 'accuracy'])
-
-        if verbose == EPOCHWISE :
-            pbar = ProgressBar(bar_format=None, ncols=120)
-            pbar.attach(val_engine, ['loss', 'accuracy'])
-
-            # @val_engine.on(Events.EPOCH_COMPLETED)
-            # def print_logs(engine) :
-            #     print('        Valid - Accuracy: {:.4f} Loss: {:.4f} Lowest_loss={:.4f}'.format(
-            #         engine.state.metrics['accuracy'],
-            #         engine.state.metrics['loss'],
-            #         engine.best_loss,
-            #     ))
 
     @staticmethod
     def check_best(engine) :
@@ -141,44 +94,28 @@ class KerasLikeEngine(Engine) :
             **kwargs
         }, config.model_fn)
 
-    @staticmethod
-    def print_logs(engine) :
-        print('        Valid - Accuracy: {:.4f} Loss: {:.4f} Lowest_loss={:.4f}'.format(
-            engine.state.metrics['accuracy'],
-            engine.state.metrics['loss'],
-            engine.best_loss,
-        ))
-
 
 class Trainer :
     def __init__(self, config) :
         self.config = config
 
-    def train(self, model, optimizer, loss, train_loader, val_loader) :
+    def train(self, model, optimizer, loss, train_loader) :
         # Make Engine object
         train_engine = KerasLikeEngine(KerasLikeEngine.train, model, optimizer, loss, self.config)
-        val_engine = KerasLikeEngine(KerasLikeEngine.valid, model, optimizer, loss, self.config)
 
         # Attach Metrics
-        KerasLikeEngine.attach(train_engine, val_engine, verbose=self.config.verbose)
+        KerasLikeEngine.attach(train_engine, verbose=self.config.verbose)
 
         # Event Handling
-        def run_validation(engine, validation_engine, valid_loader) :
-            validation_engine.run(valid_loader, max_epochs=1)
-
         train_engine.add_event_handler(Events.EPOCH_COMPLETED,
-                                       run_validation, val_engine, val_loader)
-        val_engine.add_event_handler(Events.EPOCH_COMPLETED,
                                      KerasLikeEngine.check_best)
-        val_engine.add_event_handler(Events.EPOCH_COMPLETED,
+        train_engine.add_event_handler(Events.EPOCH_COMPLETED,
                                      KerasLikeEngine.save_model, train_engine, self.config)
-        val_engine.add_event_handler(Events.EPOCH_COMPLETED,
-                                     KerasLikeEngine.print_logs, val_engine)
 
 
         # running
         train_engine.run(train_loader, max_epochs=self.config.n_epochs)
 
-        model.load_state_dict(val_engine.best_model)
+        model.load_state_dict(train_engine.best_model)
 
         return model
