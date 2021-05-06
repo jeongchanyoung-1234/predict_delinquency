@@ -1,0 +1,4 @@
+usage
+```
+./bk.sh . ./backup
+```
